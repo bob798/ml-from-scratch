@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>过拟合 · 学规律还是背答案</title>
+<style>
+  :root{--ink:#12141c;--panel:#1b1e28;--line:#2a2f3c;--train:#f5b340;--true:#4fd6c9;--fit:#ff6b5e;--muted:#9aa0b0;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--ink);color:#e8e4da;min-height:100vh;font-family:Georgia,serif;padding:24px 16px 40px;}
+  .wrap{max-width:640px;margin:0 auto;}
+  .kicker{font-size:12px;letter-spacing:3px;color:var(--train);font-family:ui-monospace,monospace;text-transform:uppercase;}
+  h1{font-size:25px;font-weight:600;margin:4px 0 16px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;}
+  svg{display:block;width:100%;}
+  input[type=range]{width:100%;accent-color:var(--train);margin-top:6px;}
+  .mono{font-family:ui-monospace,monospace;}
+  .legend{display:flex;gap:16px;font-size:12px;font-family:ui-monospace,monospace;color:var(--muted);margin-bottom:10px;flex-wrap:wrap;}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+  .label{font-size:12.5px;color:var(--muted);font-family:ui-monospace,monospace;margin:12px 0 6px;}
+  .state{font-size:18px;font-weight:600;text-align:center;margin:10px 0 4px;}
+  .errs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+  .err-box{background:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:ui-monospace,monospace;}
+  .err-box .t{font-size:11px;color:var(--muted);}
+  .err-box .v{font-size:20px;font-weight:600;margin-top:3px;}
+  .verdict{margin-top:12px;padding:11px 13px;border-radius:8px;background:var(--ink);border:1px solid var(--line);font-family:ui-monospace,monospace;font-size:13px;line-height:1.55;color:#cdd2dd;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">泛化 · 第一性原理</div>
+  <h1>学到规律,还是背下答案?</h1>
+
+  <div class="card">
+    <div class="legend">
+      <span><span class="dot" style="background:var(--train)"></span>训练数据(模型见过的)</span>
+      <span><span class="dot" style="background:var(--true)"></span>真实规律</span>
+      <span><span class="dot" style="background:var(--fit)"></span>模型学到的曲线</span>
+    </div>
+    <svg id="plot" viewBox="0 0 600 320"></svg>
+
+    <div class="label">模型复杂度(拖动):<b class="mono" id="cVal" style="color:var(--train)"></b></div>
+    <input type="range" id="cx" min="1" max="15" step="1" value="1">
+
+    <div class="state mono" id="stateLabel"></div>
+    <div class="errs">
+      <div class="err-box"><div class="t">训练误差(对见过的数据)</div><div class="v" id="trainErr" style="color:var(--train)"></div></div>
+      <div class="err-box"><div class="t">测试误差(对没见过的)</div><div class="v" id="testErr" style="color:var(--fit)"></div></div>
+    </div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+</div>
+
+<script>
+// 真实规律: 一条平滑曲线 y = sin。训练点 = 真实 + 噪声
+const TRUE = x => 120 - 70*Math.sin(x*1.4);          // 真实规律(画在 0..600 x, y向下)
+function seedRnd(s){return ()=>(s=(s*1103515245+12345)&0x7fffffff)/0x7fffffff;}
+const rnd = seedRnd(11);
+// 12 个训练点(带噪声)
+const TRAIN=[]; for(let i=0;i<12;i++){const x=0.2+i*0.45; TRAIN.push({x, y:120-70*Math.sin(x*1.4)+(rnd()-0.5)*55});}
+// 测试点(另一批没见过的, 同一规律+不同噪声)
+const TEST=[]; for(let i=0;i<12;i++){const x=0.4+i*0.45; TEST.push({x, y:120-70*Math.sin(x*1.4)+(rnd()-0.5)*55});}
+
+const SX = x => 30 + (x/6)*540;      // x(0..6) → 像素
+const SY = y => y + 40;              // y 直接当像素(已在合理范围)
+
+// 用多项式拟合训练点, degree = 复杂度。degree 越高越能穿过每个点(过拟合)
+function polyfit(pts, deg){
+  // 构造范德蒙德矩阵最小二乘(简化版高斯消元)
+  const n=pts.length, m=deg+1;
+  let A=[],b=[];
+  for(let r=0;r<m;r++){
+    A[r]=[]; let bb=0;
+    for(let c=0;c<m;c++){ let s=0; for(const p of pts) s+=Math.pow(p.x,r+c); A[r][c]=s; }
+    for(const p of pts) bb+=Math.pow(p.x,r)*p.y; b[r]=bb;
+  }
+  // 高斯消元解 A coef = b
+  for(let i=0;i<m;i++){
+    let piv=A[i][i]||1e-9;
+    for(let j=i;j<m;j++)A[i][j]/=piv; b[i]/=piv;
+    for(let k=0;k<m;k++)if(k!==i){const f=A[k][i];for(let j=i;j<m;j++)A[k][j]-=f*A[i][j];b[k]-=f*b[i];}
+  }
+  return b; // 系数
+}
+const evalPoly=(coef,x)=>coef.reduce((s,c,i)=>s+c*Math.pow(x,i),0);
+const mse=(pts,coef)=>pts.reduce((s,p)=>s+Math.pow(p.y-evalPoly(coef,p.x),2),0)/pts.length;
+
+function render(){
+  const deg=parseInt(document.getElementById("cx").value);
+  document.getElementById("cVal").textContent=deg;
+  const coef=polyfit(TRAIN,deg);
+
+  let svg="";
+  // 真实规律曲线
+  let d1="M";
+  for(let x=0;x<=6;x+=0.05){d1+=` ${SX(x).toFixed(1)},${SY(TRUE(x)).toFixed(1)}`;}
+  svg+=`<path d="${d1}" fill="none" stroke="#4fd6c9" stroke-width="2.5" opacity="0.7"/>`;
+  // 模型学到的曲线
+  let d2="M";
+  for(let x=0;x<=6;x+=0.03){let y=evalPoly(coef,x); y=Math.max(-50,Math.min(370,y)); d2+=` ${SX(x).toFixed(1)},${SY(y).toFixed(1)}`;}
+  svg+=`<path d="${d2}" fill="none" stroke="#ff6b5e" stroke-width="2.5"/>`;
+  // 训练点
+  TRAIN.forEach(p=>{svg+=`<circle cx="${SX(p.x).toFixed(1)}" cy="${SY(p.y).toFixed(1)}" r="5" fill="#f5b340"/>`;});
+  document.getElementById("plot").innerHTML=svg;
+
+  const trErr=mse(TRAIN,coef), teErr=mse(TEST,coef);
+  document.getElementById("trainErr").textContent=trErr.toFixed(0);
+  document.getElementById("testErr").textContent=teErr>9999?"爆炸":teErr.toFixed(0);
+
+  let state,verdict;
+  if(deg<=2){
+    state="🥱 欠拟合(太笨)";
+    verdict="模型太简单,连训练数据的规律都没抓住 —— 训练误差和测试误差都大。就像只会背'万物皆直线'。";
+    document.getElementById("stateLabel").style.color="#9aa0b0";
+  }else if(deg<=6){
+    state="✅ 刚刚好(学到了规律)";
+    verdict="模型抓住了真实规律(红线贴近青线),训练和测试误差都低。它学到的是'规律',能用在没见过的新数据上 —— 这就是泛化。";
+    document.getElementById("stateLabel").style.color="#4fd6c9";
+  }else{
+    state="🤯 过拟合(死记硬背)";
+    verdict="模型为了穿过每一个训练点,扭成了奇形怪状 —— 训练误差极小,但测试误差暴涨。它背下了'答案'(连噪声都背),却丢了'规律',对新数据一塌糊涂。";
+    document.getElementById("stateLabel").style.color="#ff6b5e";
+  }
+  document.getElementById("stateLabel").textContent=state;
+  document.getElementById("verdict").textContent=verdict;
+}
+document.getElementById("cx").addEventListener("input",render);
+render();
+</script>
+</body>
+</html>

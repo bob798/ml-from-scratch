@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>随机森林 · fit 内部</title>
+<style>
+  :root {
+    --ink:#12141c; --panel:#1b1e28; --line:#2a2f3c;
+    --live:#4fd6c9; --died:#ff6b5e; --amber:#f5b340; --muted:#9aa0b0;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:var(--ink); color:#e8e4da; min-height:100vh;
+    font-family:Georgia,'Times New Roman',serif;
+    padding:24px 16px 40px;
+  }
+  .wrap { max-width:640px; margin:0 auto; }
+  .kicker { font-size:12px; letter-spacing:3px; color:var(--amber);
+    font-family:ui-monospace,Menlo,monospace; text-transform:uppercase; }
+  h1 { font-size:25px; font-weight:600; margin:4px 0 16px; }
+  .card { background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:16px 16px 18px; margin-bottom:18px; }
+  .card-title { font-size:15px; font-weight:600; margin-bottom:4px; }
+  .mono { font-family:ui-monospace,Menlo,monospace; }
+  .desc { font-size:12.5px; color:var(--muted); margin-bottom:12px;
+    font-family:ui-monospace,Menlo,monospace; line-height:1.5; }
+  .btn-row { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+  .feat-btn { background:transparent; color:var(--muted);
+    border:1px solid var(--line); border-radius:7px; padding:5px 12px;
+    font-size:13px; cursor:pointer; font-family:ui-monospace,Menlo,monospace; font-weight:600; }
+  .feat-btn.active { background:var(--amber); color:var(--ink); border-color:var(--amber); }
+  svg { display:block; width:100%; }
+  input[type=range] { width:100%; accent-color:var(--amber); margin-top:8px; }
+  .stat-row { display:flex; justify-content:space-between; margin-top:12px;
+    font-family:ui-monospace,Menlo,monospace; font-size:13px; }
+  .big-btn { margin-top:12px; width:100%; background:var(--amber); color:var(--ink);
+    border:none; border-radius:8px; padding:10px; font-size:13.5px; font-weight:600;
+    cursor:pointer; font-family:ui-monospace,Menlo,monospace; }
+  .hint { font-size:11.5px; color:#6b7180; margin-top:8px; font-family:ui-monospace,Menlo,monospace; line-height:1.5; }
+  .bar { display:flex; height:30px; border-radius:6px; overflow:hidden; border:1px solid var(--line); }
+  .verdict { margin-top:14px; padding:11px 13px; border-radius:8px; background:var(--ink);
+    font-family:ui-monospace,Menlo,monospace; font-size:13.5px; }
+  b.live{color:var(--live)} b.died{color:var(--died)} b.amber{color:var(--amber)}
+  span.live{color:var(--live)} span.died{color:var(--died)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">随机森林 · fit 内部</div>
+  <h1>fit() 在做什么</h1>
+
+  <!-- ① 一棵树找最佳一刀 -->
+  <div class="card">
+    <div class="card-title">① 一棵树:找"最能分开生死的一刀"</div>
+    <div class="desc">选一个特征,拖动竖线 = 切一刀。看左右两边能不能干净分出 <span class="live">活</span> 和 <span class="died">死</span>。</div>
+    <div class="btn-row" id="featBtns"></div>
+    <svg id="scatter" viewBox="0 0 600 150"></svg>
+    <input type="range" id="thrSlider" />
+    <div class="stat-row">
+      <span class="mono" style="color:var(--muted)" id="cutLabel"></span>
+      <span class="mono">分得有多开:<b id="accVal"></b></span>
+    </div>
+    <button class="big-btn" id="bestBtn">自动找最佳一刀 ▸（这就是 fit 干的事）</button>
+    <div class="hint" id="bestHint"></div>
+  </div>
+
+  <!-- ② N 棵树投票 -->
+  <div class="card">
+    <div class="card-title">② 几百棵树投票:规模化的价值</div>
+    <div class="desc">每棵树只有约 68% 准,但让它们投票。这位乘客真实结局是 <span class="live">活</span>。拖动看树越多,多数票越稳。</div>
+    <div class="bar"><div id="barLive" style="background:var(--live)"></div><div id="barDied" style="background:var(--died)"></div></div>
+    <div class="stat-row">
+      <span class="live mono">投"活" <span id="voteLive"></span></span>
+      <span class="died mono">投"死" <span id="voteDied"></span></span>
+    </div>
+    <div class="mono" style="margin:14px 0 6px;font-size:12.5px;color:var(--muted)">树的数量 N = <b class="amber" id="nVal"></b></div>
+    <input type="range" id="nSlider" min="1" max="200" step="1" value="1" />
+    <div class="verdict" id="verdict"></div>
+  </div>
+</div>
+
+<script>
+// ---- 固定迷你乘客数据(60人):女性/高舱位更易活 + 噪声 ----
+function makeData(){
+  let seed=7; const rnd=()=>(seed=(seed*1103515245+12345)&0x7fffffff)/0x7fffffff;
+  const arr=[];
+  for(let i=0;i<60;i++){
+    const sex=rnd()<0.4?1:0;
+    const pclass=rnd()<0.3?1:(rnd()<0.6?2:3);
+    const age=Math.round(5+rnd()*65);
+    const fare=Math.round(rnd()*100);
+    let p=0.15+0.5*sex+0.15*(pclass===1?1:0)+0.1*(age<12?1:0);
+    arr.push({id:i,sex,pclass,age,fare,survived:rnd()<p?1:0});
+  }
+  return arr;
+}
+const DATA=makeData();
+const FEATURES={
+  Sex:{key:"sex",label:"性别",min:0,max:1,fmt:v=>v<0.5?"男":"女"},
+  Age:{key:"age",label:"年龄",min:0,max:70,fmt:v=>Math.round(v)},
+  Fare:{key:"fare",label:"票价",min:0,max:100,fmt:v=>Math.round(v)},
+  Pclass:{key:"pclass",label:"舱位",min:1,max:3,fmt:v=>v.toFixed(1)+"等"},
+};
+function accuracyOfCut(key,thr){
+  const L=DATA.filter(d=>d[key]<=thr), R=DATA.filter(d=>d[key]>thr);
+  const gc=g=>{ if(!g.length)return 0; const l=g.filter(d=>d.survived).length; return Math.max(l,g.length-l); };
+  return (gc(L)+gc(R))/DATA.length;
+}
+// 全局最佳一刀
+let BEST={acc:0,thr:0,feat:"Sex"};
+Object.entries(FEATURES).forEach(([name,ff])=>{
+  for(let t=ff.min;t<=ff.max;t+=(ff.max-ff.min)/40){
+    const a=accuracyOfCut(ff.key,t);
+    if(a>BEST.acc){BEST={acc:a,thr:t,feat:name};}
+  }
+});
+
+let feat="Sex", thr=0.5;
+const C={live:"#4fd6c9",died:"#ff6b5e",amber:"#f5b340"};
+
+function render(){
+  const F=FEATURES[feat];
+  const W=600,H=150,padX=30,padY=20;
+  const xOf=v=>padX+((v-F.min)/((F.max-F.min)||1))*(W-2*padX);
+  // 散点
+  let svg="";
+  DATA.forEach(d=>{
+    const jitter=((d.id*37)%100)/100;
+    svg+=`<circle cx="${xOf(d[F.key]).toFixed(1)}" cy="${(padY+jitter*(H-2*padY)).toFixed(1)}" r="5" fill="${d.survived?C.live:C.died}" opacity="0.85"/>`;
+  });
+  const tx=xOf(thr).toFixed(1);
+  svg+=`<line x1="${tx}" y1="6" x2="${tx}" y2="${H-6}" stroke="${C.amber}" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+  document.getElementById("scatter").innerHTML=svg;
+
+  const acc=accuracyOfCut(F.key,thr);
+  document.getElementById("cutLabel").textContent=`这一刀切在 ${F.label}=${F.fmt(thr)}`;
+  const av=document.getElementById("accVal");
+  av.textContent=(acc*100).toFixed(0)+"%";
+  av.style.color=acc>0.75?C.live:(acc>0.65?C.amber:C.died);
+
+  document.getElementById("bestHint").textContent=
+    `最佳:在「${FEATURES[BEST.feat].label}」切一刀,能分对 ${(BEST.acc*100).toFixed(0)}% —— 算法扫遍所有特征所有切点,挑这个。`;
+
+  // 按钮高亮
+  document.querySelectorAll(".feat-btn").forEach(b=>{
+    b.classList.toggle("active",b.dataset.name===feat);
+  });
+  // 滑块范围
+  const s=document.getElementById("thrSlider");
+  s.min=F.min; s.max=F.max; s.step=(F.max-F.min)/100; s.value=thr;
+}
+
+// 特征按钮
+const fb=document.getElementById("featBtns");
+Object.keys(FEATURES).forEach(name=>{
+  const btn=document.createElement("button");
+  btn.className="feat-btn"; btn.dataset.name=name; btn.textContent=FEATURES[name].label;
+  btn.onclick=()=>{ feat=name; thr=(FEATURES[name].min+FEATURES[name].max)/2; render(); };
+  fb.appendChild(btn);
+});
+document.getElementById("thrSlider").addEventListener("input",e=>{thr=parseFloat(e.target.value);render();});
+document.getElementById("bestBtn").onclick=()=>{ feat=BEST.feat; thr=BEST.thr; render(); };
+
+// ---- ② 投票 ----
+function renderVote(){
+  const N=parseInt(document.getElementById("nSlider").value);
+  let s=99; const r=()=>(s=(s*1103515245+12345)&0x7fffffff)/0x7fffffff;
+  let live=0;
+  for(let i=0;i<N;i++){ if((r()<0.68?1:0)===1)live++; }
+  const died=N-live;
+  document.getElementById("barLive").style.width=(live/N*100)+"%";
+  document.getElementById("barDied").style.width=(died/N*100)+"%";
+  document.getElementById("voteLive").textContent=live;
+  document.getElementById("voteDied").textContent=died;
+  document.getElementById("nVal").textContent=N;
+  const maj=live>=died?1:0, right=maj===1;
+  const v=document.getElementById("verdict");
+  v.style.border=`1px solid ${right?C.live:C.died}55`;
+  v.innerHTML=`多数票判:<b class="${maj?'live':'died'}">${maj?'活':'死'}</b>  `+
+    `<span class="${right?'live':'died'}">${right?'✓ 对了':'✗ 错了'}</span>`+
+    `<div class="hint">N=1 时全看那一棵的运气,容易错;N 越大,个别树的错误被平均掉,多数票越来越稳 —— 这就是"几百棵"的意义。</div>`;
+}
+document.getElementById("nSlider").addEventListener("input",renderVote);
+
+render(); renderVote();
+</script>
+</body>
+</html>
