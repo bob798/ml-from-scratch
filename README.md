@@ -40,6 +40,14 @@
 - [resources/python-for-java-devs.md](resources/python-for-java-devs.md) — Java转Python速查
 - [glossary.md](glossary.md) — 双语术语表
 
+## 实践经验沉淀（notes/）
+
+学习线之外的另一条线：行业洞察、决策框架、团队管理。
+
+- [notes/industry/](notes/industry/) — 行业场景拆解（如 AI 视频分析的业务+技术双视角）
+- [notes/decision/](notes/decision/) — 项目"该不该做"的判断方法论
+- [notes/management/](notes/management/) — 团队管理（含非专家如何管算法团队）
+
 ## 学习心法
 
 1. **能讲、能写代码、能教别人** —— 三关过不了就没真懂
