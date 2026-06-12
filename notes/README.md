@@ -16,6 +16,7 @@
 
 ### industry/ —— 行业拆解
 - [ai-video-analytics.md](industry/ai-video-analytics.md) — AI 视频分析（暴露垃圾 / 入侵 / 遗留物 / 异常行为检测）的业务与技术拆解
+- [video-analytics-glossary.md](industry/video-analytics-glossary.md) — 视频分析行业术语速查（管理者视角，含黑话识破指南）
 
 ### decision/ —— 决策框架
 - [ai-video-analytics-go-no-go.md](decision/ai-video-analytics-go-no-go.md) — 上帝视角：AI 视频分析这事该不该做？用什么方法论？怎么决策？
