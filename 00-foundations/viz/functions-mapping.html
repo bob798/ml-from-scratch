@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>函数与映射 · 唯一输出与复合</title>
+<style>
+  :root{--ink:#12141c;--panel:#1b1e28;--line:#2a2f3c;--train:#f5b340;--true:#4fd6c9;--fit:#ff6b5e;--muted:#9aa0b0;--paper:#e8e4da;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--ink);color:var(--paper);min-height:100vh;font-family:Georgia,serif;padding:24px 16px 48px;}
+  .wrap{max-width:640px;margin:0 auto;}
+  .kicker{font-size:12px;letter-spacing:3px;color:var(--train);font-family:ui-monospace,monospace;text-transform:uppercase;}
+  h1{font-size:25px;font-weight:600;margin:4px 0 18px;}
+  h2{font-size:16px;font-weight:600;margin:0 0 4px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px;}
+  .sub{font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5;}
+  svg{display:block;width:100%;}
+  .mono{font-family:ui-monospace,monospace;}
+  button{font-family:ui-monospace,monospace;font-size:13px;color:var(--ink);background:var(--train);border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600;}
+  button:hover{filter:brightness(1.08);}
+  .verdict{margin-top:10px;padding:11px 13px;border-radius:8px;background:var(--ink);border:1px solid var(--line);font-family:ui-monospace,monospace;font-size:13.5px;line-height:1.55;}
+  .ok{color:var(--true);} .bad{color:var(--fit);}
+  input[type=range]{width:100%;accent-color:var(--train);margin-top:8px;}
+  .label{font-size:12.5px;color:var(--muted);font-family:ui-monospace,monospace;margin:14px 0 2px;}
+  .legend{font-size:11.5px;color:var(--muted);font-family:ui-monospace,monospace;margin-top:8px;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">函数与映射 · 第一性原理</div>
+  <h1>「唯一输出」与「复合生产线」</h1>
+
+  <!-- ============ Card 1: 函数 vs 关系 ============ -->
+  <div class="card">
+    <h2>① 函数 vs 关系：差别只在「输出是否唯一」</h2>
+    <div class="sub">左边输入，右边输出，箭头是「指向规则」。每个输入<b>恰好</b>一个箭头 → 函数；只要有一个输入伸出两个箭头 → 掉回「关系」。</div>
+    <svg id="mapSvg" viewBox="0 0 600 300"></svg>
+    <div style="margin-top:6px"><button id="toggleBtn">切换：让输入「2」多伸一个箭头</button></div>
+    <div class="verdict" id="mapVerdict"></div>
+  </div>
+
+  <!-- ============ Card 2: 复合 ============ -->
+  <div class="card">
+    <h2>② 复合：一个函数的输出，喂给下一个</h2>
+    <div class="sub">拖动 x，看它过 <span class="mono">g(x)=2x+1</span> 再过 <span class="mono">f(u)=u²</span>，整条生产线 = <span class="mono">f(g(x))</span>。</div>
+    <svg id="compSvg" viewBox="0 0 600 150"></svg>
+    <div class="label">输入 x = <b class="mono" id="xVal" style="color:var(--train)"></b>（拖动）</div>
+    <input type="range" id="xRange" min="-4" max="4" step="1" value="3">
+    <div class="verdict mono" id="compVerdict"></div>
+  </div>
+
+  <div class="legend">
+    想通这两点，「神经网络是什么」就不神秘：它是一张写不出公式、但输出唯一的超级大对照表，且本质是一长串函数的复合。
+  </div>
+</div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+const C = {train:"#f5b340", true:"#4fd6c9", fit:"#ff6b5e", line:"#2a2f3c", paper:"#e8e4da", muted:"#9aa0b0"};
+
+/* ---------- Card 1: 函数 vs 关系 ---------- */
+const inputs  = [1, 2, 3];                    // 定义域 A
+const outputs = [2, 5, 10, 20];               // 陪域 B
+const yA = [70, 150, 230];                    // 输入纵坐标
+const yB = [50, 117, 184, 251];               // 输出纵坐标
+const cxA = 165, cxB = 435, R = 26;
+// 函数映射：input i → output i（值上恰好是 x²+1：1→2,2→5,3→10）
+const baseMap = [0, 1, 2];
+let relationMode = false;                     // 是否让输入"2"多一个箭头(→20)
+
+const mapSvg = document.getElementById("mapSvg");
+const mapVerdict = document.getElementById("mapVerdict");
+
+function drawMap(){
+  mapSvg.innerHTML = "";
+  // 列标题
+  mapSvg.appendChild(txt(cxA, 24, "输入 (定义域 A)", C.muted, 13));
+  mapSvg.appendChild(txt(cxB, 24, "输出 (陪域 B)", C.muted, 13));
+
+  // 箭头：先画线再画节点(节点压在上面)
+  const badInput = relationMode ? 1 : -1;     // 输入索引 1 = 值"2"
+  inputs.forEach((v,i)=>{
+    const isBad = (i===badInput);
+    const col = isBad ? C.fit : C.true;
+    // 主箭头
+    arrow(cxA+R, yA[i], cxB-R, yB[baseMap[i]], col);
+    // 关系模式下，输入"2"多伸一条到 output 20
+    if(isBad) arrow(cxA+R, yA[i], cxB-R, yB[3], C.fit);
+  });
+
+  // 输入节点
+  inputs.forEach((v,i)=>{
+    const isBad = (i===(relationMode?1:-1));
+    node(cxA, yA[i], v, isBad ? C.fit : C.paper, isBad);
+  });
+  // 输出节点
+  outputs.forEach((v,i)=>{
+    const used = relationMode ? [0,1,2,3] : [0,1,2];
+    const on = used.includes(i);
+    node(cxB, yB[i], v, on ? C.paper : C.line, false, on?1:0.35);
+  });
+
+  // 判定
+  if(relationMode){
+    mapVerdict.innerHTML = '<span class="bad">❌ 不是函数</span> — 输入 <b>2</b> 同时指向 5 和 20，「一个输入两个输出」，违反「输出唯一」。这叫<b>关系(relation)</b>。';
+  } else {
+    mapVerdict.innerHTML = '<span class="ok">✅ 是函数</span> — 每个输入<b>恰好</b>一个箭头。规则碰巧是 x²+1，但写不写得出公式都不影响它是函数。';
+  }
+}
+function node(cx,cy,label,stroke,bad,op=1){
+  const g = el("g",{opacity:op});
+  g.appendChild(el("circle",{cx,cy,r:R,fill:"#12141c",stroke,"stroke-width":bad?3:2}));
+  g.appendChild(txt(cx,cy+5,label,stroke,16,"ui-monospace,monospace",600));
+  mapSvg.appendChild(g);
+}
+function arrow(x1,y1,x2,y2,col){
+  const line = el("line",{x1,y1,x2,y2,stroke:col,"stroke-width":2.2,opacity:0.85});
+  mapSvg.appendChild(line);
+  // 箭头头
+  const ang = Math.atan2(y2-y1,x2-x1), a=9;
+  const h = el("polygon",{points:`${x2},${y2} ${x2-a*Math.cos(ang-0.4)},${y2-a*Math.sin(ang-0.4)} ${x2-a*Math.cos(ang+0.4)},${y2-a*Math.sin(ang+0.4)}`,fill:col});
+  mapSvg.appendChild(h);
+}
+function txt(x,y,s,fill,size,family="Georgia,serif",weight=400){
+  const t = el("text",{x,y,fill,"font-size":size,"text-anchor":"middle","font-family":family,"font-weight":weight});
+  t.textContent = s; return t;
+}
+document.getElementById("toggleBtn").addEventListener("click",()=>{ relationMode=!relationMode; drawMap(); });
+
+/* ---------- Card 2: 复合 ---------- */
+const compSvg = document.getElementById("compSvg");
+const xRange = document.getElementById("xRange");
+const xValEl = document.getElementById("xVal");
+const compVerdict = document.getElementById("compVerdict");
+const g = x => 2*x+1, f = u => u*u;
+
+function box(cx, label, sub, col){
+  const w=110,h=56,x=cx-w/2,y=40;
+  compSvg.appendChild(el("rect",{x,y,width:w,height:h,rx:9,fill:"#12141c",stroke:col,"stroke-width":2}));
+  compSvg.appendChild(txt(cx,y+24,label,col,15,"ui-monospace,monospace",600));
+  compSvg.appendChild(txt(cx,y+44,sub,C.muted,11,"ui-monospace,monospace"));
+}
+function pill(cx,val,col){
+  compSvg.appendChild(el("circle",{cx,cy:68,r:20,fill:"#12141c",stroke:col,"stroke-width":2}));
+  compSvg.appendChild(txt(cx,73,val,col,14,"ui-monospace,monospace",600));
+}
+function flow(x1,x2){
+  compSvg.appendChild(el("line",{x1,y1:68,x2:x2-7,y2:68,stroke:C.muted,"stroke-width":2}));
+  compSvg.appendChild(el("polygon",{points:`${x2},68 ${x2-8},64 ${x2-8},72`,fill:C.muted}));
+}
+function drawComp(){
+  compSvg.innerHTML="";
+  const x = +xRange.value, u = g(x), y = f(u);
+  xValEl.textContent = x;
+  const xs=55, b1=185, us=315, b2=445, ys=560;
+  pill(xs, x, C.train);
+  flow(xs+20, b1-55);
+  box(b1, "g: ×2+1", "放大倍数 2", C.true);
+  flow(b1+55, us-20);
+  pill(us, u, C.true);
+  flow(us+20, b2-55);
+  box(b2, "f: (·)²", "放大倍数 2u", C.fit);
+  flow(b2+55, ys-20);
+  pill(ys, y, C.fit);
+  compSvg.appendChild(txt(55,28,"x",C.train,12,"ui-monospace,monospace"));
+  compSvg.appendChild(txt(315,28,"u=g(x)",C.true,12,"ui-monospace,monospace"));
+  compSvg.appendChild(txt(560,28,"y=f(u)",C.fit,12,"ui-monospace,monospace"));
+  compVerdict.innerHTML = `f(g(${x})) = f(${u}) = <b style="color:var(--fit)">${y}</b>　—　先过 g 得 ${u}，再喂给 f 得 ${y}。整个网络就是这样一层层复合出来的。`;
+}
+xRange.addEventListener("input",drawComp);
+
+drawMap();
+drawComp();
+</script>
+</body>
+</html>

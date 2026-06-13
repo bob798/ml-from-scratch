@@ -13,4 +13,5 @@
 - `code/pytorch_autograd.py` — 同一问题换PyTorch,看 backward() 替你做了什么
 
 ## 可视化
+- `viz/functions-mapping.html` — 切换函数/关系看「输出唯一」,拖 x 看复合生产线(直接浏览器打开)
 - `viz/gradient-descent.jsx` — 拖小球感受斜率与下坡(需Vite,或看HTML版)
