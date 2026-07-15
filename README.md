@@ -1,60 +1,64 @@
 # ml-from-scratch
 
-> 从零手写机器学习 —— 一个工程师的 ML 学习记录
-> 不调包、先把每个概念手写跑通、能讲明白,再上框架。
+> Machine learning implemented from first principles — no libraries doing the thinking for you.
+> Write every concept by hand until you can run it, draw it, and explain it. Frameworks come after.
 
-## 脊柱:一句话理解机器学习
+An engineer's working notes on ML fundamentals. Each concept is hand-implemented in plain
+NumPy/PyTorch, paired with a visualization and a "can you actually explain this?" check.
 
-**机器学习 = 从数据里找一个函数。**
+## The spine: ML in one sentence
+
+**Machine learning is finding a function from data.**
 
 ```
-模型      = 函数
-训练      = 找这个函数的参数
-损失      = 衡量函数好不好
-梯度下降  = 沿斜率往谷底走 (w -= lr*g)
-反向传播  = 复合函数求导(链式法则)
+model            = the function
+training         = finding its parameters
+loss             = how wrong the function is
+gradient descent = walk downhill along the slope (w -= lr*g)
+backpropagation  = the chain rule, applied to composed functions
 ```
 
-## 学习路线(按顺序)
+## Path (in order)
 
-| 章节 | 主题 | 状态 |
+| Chapter | Topic | Status |
 |---|---|---|
-| [00 · Foundations](00-foundations/) | 函数→斜率→梯度下降→反向传播 | ✅ |
-| [01 · Tree Models](01-tree-models/) | 决策树→随机森林、参数vs非参数 | ✅ |
-| [02 · Core Concepts](02-core-concepts/) | 过拟合/泛化、模型诊断 | ✅ |
-| 03 · Neural Networks | 多层网络、激活函数 | 🔜 |
+| [00 · Foundations](00-foundations/) | functions → slopes → gradient descent → backprop | ✅ |
+| [01 · Tree Models](01-tree-models/) | decision trees → random forests; parametric vs non-parametric | ✅ |
+| [02 · Core Concepts](02-core-concepts/) | overfitting/generalization, model diagnosis | ✅ |
+| 03 · Neural Networks | multi-layer networks, activation functions | 🔜 |
 
-每章是一个自包含单元:讲解 + 代码 + 可视化放在一起。
+Each chapter is self-contained: explanation, code, and visualization in one place.
 
-## 怎么用这个仓库
+## How to use this repo
 
-- **学习者**:从 00 章按顺序读,每篇配"验收三问",过不了就回炉
-- **复习**:看 [glossary.md](glossary.md) 双语术语表快速捡回
-- **跑代码**:`pip install numpy torch pandas scikit-learn`,进各章 code/ 目录运行
-- **看可视化**:各章 viz/ 里的 .html 双击即可在浏览器打开
+- **Learning it**: read 00 onward in order. Each piece ends with three verification questions —
+  if you can't answer them, go back rather than forward.
+- **Reference**: [glossary.md](glossary.md) — bilingual (EN/CN) term table.
+- **Running the code**: `pip install numpy torch pandas scikit-learn`, then run from each chapter's `code/`.
+- **Visualizations**: open the `.html` files under each chapter's `viz/` in a browser.
 
-## 资源
+## Resources
 
-- [resources/roadmap.md](resources/roadmap.md) — 4-6周动手计划
-- [resources/courses.md](resources/courses.md) — Coursera/Kaggle链接 + 老课新课辨析
-- [resources/python-for-java-devs.md](resources/python-for-java-devs.md) — Java转Python速查
-- [glossary.md](glossary.md) — 双语术语表
+- [resources/roadmap.md](resources/roadmap.md) — a 4–6 week hands-on plan
+- [resources/courses.md](resources/courses.md) — Coursera/Kaggle links, and which classic courses are now outdated
+- [resources/python-for-java-devs.md](resources/python-for-java-devs.md) — Python quick-reference for Java developers
+- [glossary.md](glossary.md) — bilingual term table
 
-## 实践经验沉淀（notes/）
+## Field notes (`notes/`)
 
-学习线之外的另一条线：行业洞察、决策框架、团队管理。
+A second track alongside the fundamentals: industry teardowns and decision frameworks
+from shipping AI systems in production. *(Written in Chinese.)*
 
-- [notes/industry/](notes/industry/) — 行业场景拆解（如 AI 视频分析的业务+技术双视角）
-- [notes/decision/](notes/decision/) — 项目"该不该做"的判断方法论
-- [notes/management/](notes/management/) — 团队管理（含非专家如何管算法团队）
+- [notes/industry/](notes/industry/) — domain teardowns (e.g. AI video analytics: business + technical view)
+- [notes/decision/](notes/decision/) — how to judge whether an AI project should be built at all
 
-## 学习心法
+## Principles
 
-1. **能讲、能写代码、能教别人** —— 三关过不了就没真懂
-2. **先动手再求理论** —— 概念先用代码跑通,数学推导等有手感再回看
-3. **中文理解 + 英文术语** —— 概念用中文想透,术语锚定英文原词
-4. **会诊断比会用更重要** —— 分清过拟合/欠拟合/数据偏差,对症下药
+1. **Explain it, code it, teach it** — fail any of the three and you don't understand it yet.
+2. **Hands before theory** — get the concept running first; derive the math once you have intuition.
+3. **Think in your native language, anchor terms in English** — concepts in CN, terminology in EN.
+4. **Diagnosis beats usage** — telling overfitting from underfitting from bad data is the real skill.
 
 ---
 
-*学习中,持续更新。GitHub: [@bob798](https://github.com/bob798)*
+*Actively extended. GitHub: [@bob798](https://github.com/bob798)*
